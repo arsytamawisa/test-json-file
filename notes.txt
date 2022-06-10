@@ -1,0 +1,7 @@
+How to apply ReDoc:
+
+1. Export postman collection
+2. Convert to openapi 2.0 / 3.0 format (yml), postman-to-openapi library js
+3. Convert yml file to json, https://editor.swagger.io/
+4. Hosting json file
+5. Copy-paste index.html and change the spec-url
