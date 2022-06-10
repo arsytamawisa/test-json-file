@@ -1,0 +1,283 @@
+{
+	"info": {
+		"_postman_id": "39f8a4d5-0fd4-4fb1-8191-7a7bbb970a70",
+		"name": "API GW EXTERNAL",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "OAuth",
+			"item": [
+				{
+					"name": "Get oAuth",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"token\", jsonData.access_token);",
+									"pm.test(\"OAuth2 request returns token with status code 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var clientId = pm.environment.get(\"clientId\");",
+									"var clientSecret = pm.environment.get(\"clientSecret\");",
+									"var authRawStr = clientId + \":\" + clientSecret;",
+									"//console.log(\"authRawStr=\" + authRawStr);",
+									"var authWordArray = CryptoJS.enc.Utf8.parse(authRawStr);",
+									"var authBase64 = CryptoJS.enc.Base64.stringify(authWordArray);",
+									"pm.variables.set(\"basicAuth\", authBase64);",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"strictSSL": false
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/x-www-form-urlencoded",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Basic {{basicAuth}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "client_credentials",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{ipPort}}/api/oauth/token",
+							"host": [
+								"{{ipPort}}"
+							],
+							"path": [
+								"api",
+								"oauth",
+								"token"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "API Services",
+			"item": [
+				{
+					"name": "Transfer In",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"function log(logText) {\r",
+									"    postman.setEnvironmentVariable(\"debug\", logText);\r",
+									"}\r",
+									"function formatLocalDate(localDate) {\r",
+									"    var now = localDate,\r",
+									"        tzo = -now.getTimezoneOffset(),\r",
+									"        dif = tzo >= 0 ? '+' : '-',\r",
+									"        pad = function(num, padLength) {\r",
+									"            var normNum = Math.abs(Math.floor(num));\r",
+									"            if (padLength == null) padLength = 2;\r",
+									"            var padStr = \"0\".repeat(padLength);\r",
+									"            var padded = (padStr + normNum).substr(-padLength);\r",
+									"            return padded;\r",
+									"        };\r",
+									"    return now.getFullYear()\r",
+									"        + '-' + pad(now.getMonth()+1)\r",
+									"        + '-' + pad(now.getDate())\r",
+									"        + 'T' + pad(now.getHours())\r",
+									"        + ':' + pad(now.getMinutes())\r",
+									"        + ':' + pad(now.getSeconds())\r",
+									"        + '.' + pad(now.getMilliseconds(), 3)\r",
+									"        + dif + pad(tzo / 60)\r",
+									"        + ':' + pad(tzo % 60);\r",
+									"}\r",
+									"function getURIPart_PathAndQueryString(fullUri) {\r",
+									"    var uri = fullUri.trim();\r",
+									"    var posProtocolSep = uri.indexOf(\"//\");\r",
+									"    if (posProtocolSep >= 0) {\r",
+									"        uri = uri.substr(posProtocolSep + 2);\r",
+									"    }\r",
+									"    var posFragmentSep = uri.indexOf(\"#\");\r",
+									"    if (posFragmentSep >= 0) {\r",
+									"        uri = uri.substr(0, posFragmentSep);\r",
+									"    }\r",
+									"    var posHostSep = uri.indexOf(\"/\");\r",
+									"    if (posHostSep < 0) {\r",
+									"        posHostSep = uri.indexOf(\"?\");\r",
+									"        if (posHostSep < 0) {\r",
+									"            return \"\";\r",
+									"        }\r",
+									"    }\r",
+									"    uri = uri.substr(posHostSep);\r",
+									"    return uri;\r",
+									"}\r",
+									"function sortQueryString(fullUri) {\r",
+									"    var sortedUri, uriPart, paramPart;\r",
+									"    // Check if URI contains any parameters\r",
+									"    if(fullUri.includes(\"?\")) {\r",
+									"        // Split URI string into URI and parameters parts\r",
+									"        uriPart = fullUri.substring(0, fullUri.indexOf(\"?\"));\r",
+									"    } else {\r",
+									"        uriPart = fullUri;\r",
+									"    }\r",
+									"    \r",
+									"    // Split URI Part into path paramaters part\r",
+									"    pathPart = uriPart.split(\"/\");\r",
+									"    var uriEncoded = \"\";\r",
+									"    for (var i = 0; i < pathPart.length; i++) {\r",
+									"        uriEncoded = uriEncoded + encodeURIComponent(decodeURIComponent(pathPart[i])).replace(\"~\",\"%7E\");\r",
+									"        if (i != pathPart.length - 1) {\r",
+									"\t        uriEncoded = uriEncoded + \"/\";\r",
+									"\t\t}\r",
+									"    }\r",
+									"    if (uriPart.endsWith(\"/\")) {\r",
+									"\t\turiEncoded = uriEncoded + \"/\";\r",
+									"    }\r",
+									"    \r",
+									"    sortedUri = uriEncoded;\r",
+									"    \r",
+									"    if(fullUri.includes(\"?\")) {\r",
+									"        paramPart = fullUri.substring(fullUri.indexOf(\"?\") + 1, fullUri.length);\r",
+									"        // Split into individual param=value pairs and sort those pairs\r",
+									"        var paramValuePairs = paramPart.split(\"&\");\r",
+									"        paramValuePairs.sort();\r",
+									"        // Rebuild sorted full URI string\r",
+									"        for (var i = 0; i < paramValuePairs.length; i++) {\r",
+									"            var prefix = (i == 0) ? \"?\" : \"&\";\r",
+									"            var key = paramValuePairs[i].split(\"=\")[0];\r",
+									"\t\t    var value = paramValuePairs[i].split(\"=\")[1];\r",
+									"\t\t    value = encodeURIComponent(decodeURIComponent(value)).replace(\"~\",\"%7E\");\r",
+									"\t\t    paramValuePairs[i] = key + \"=\" + value;\r",
+									"            sortedUri = sortedUri + prefix + paramValuePairs[i];\r",
+									"        }    \r",
+									"    }\r",
+									"    return sortedUri;\r",
+									"}\r",
+									"function canonicalizeRequestString(requestString) {\r",
+									"    var canonicalizedString = requestString.replace(/[\\n\\r\\t ]/g, \"\");\r",
+									"    return canonicalizedString;\r",
+									"}\r",
+									"function hashRequestString(requestString) {\r",
+									"    var wordArray = CryptoJS.enc.Utf8.parse(requestString);\r",
+									"    var hash = CryptoJS.SHA256(wordArray);\r",
+									"    return hash;\r",
+									"}\r",
+									"/* MAIN */\r",
+									"var apiKey = postman.getEnvironmentVariable(\"apiKey\");\r",
+									"var apiSecret = postman.getEnvironmentVariable(\"apiSecret\");\r",
+									"var accessToken = postman.getEnvironmentVariable(\"token\");\r",
+									"var timestamp = formatLocalDate(new Date());\r",
+									"//timestamp = \"2020-02-23T01:58:08.384+07:00\";\r",
+									"\r",
+									"postman.setEnvironmentVariable(\"timestamp\", timestamp);\r",
+									"\r",
+									"var uri = getURIPart_PathAndQueryString(request.url);\r",
+									"var httpMethod = request.method;\r",
+									"var requestBody = request.data;\r",
+									"if (requestBody == null || requestBody == \"[object Object]\") requestBody = \"\";\r",
+									"\r",
+									"var canondRequestBody = canonicalizeRequestString(requestBody);\r",
+									"var hashedRequestBody = hashRequestString(canondRequestBody); //.toLowerCase();\r",
+									"var sortedUri = sortQueryString(uri);\r",
+									"var key2hash = httpMethod + \":\" + sortedUri + \":\" + accessToken + \":\" + hashedRequestBody + \":\" + timestamp;\r",
+									"//postman.setEnvironmentVariable(\"StringToSign\", key2hash);\r",
+									"\r",
+									"\r",
+									"var hmac = CryptoJS.HmacSHA256(key2hash, apiSecret);\r",
+									"var hmacHex = hmac;\r",
+									"postman.setEnvironmentVariable(\"signature\", hmacHex);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "R-API-Key",
+								"value": "{{apiKey}}",
+								"type": "text"
+							},
+							{
+								"key": "R-API-Timestamp",
+								"value": "{{timestamp}}",
+								"type": "text"
+							},
+							{
+								"key": "R-API-Signature",
+								"value": "{{signature}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "switchi",
+								"value": "",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n   \"beneficiaryAccountNo\":\"000000000359\",\r\n   \"referenceNumber\":\"ALBC04251619\",\r\n   \"amount\": 10000,\r\n   \"beneficiaryName\": \"Edwin D A Putta\",\r\n   \"description\": \"description\",\r\n   \"senderAccountNumber\": \"101010\",\r\n   \"senderName\":\"Lestari\",\r\n   \"currencyCode\":\"IDR\",\r\n   \"senderBin\":\"5936001231231234\",\r\n   \"terminalId\":\"1\",\r\n   \"terminalLocation\": \"Bekasi\",\r\n   \"requestDateTime\": \"20201007141920\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{ipPort}}/transfers/in",
+							"host": [
+								"{{ipPort}}"
+							],
+							"path": [
+								"transfers",
+								"in"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
